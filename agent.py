@@ -255,7 +255,13 @@ def run_prioritization_agent(candidates: list, goal: str = None, model: str = No
     ]
 
     trace = []
-    for _ in range(12):  # hard cap so a confused model can't loop forever
+    # Each candidate needs at least 2 tool calls (erosion + economic), and
+    # the model doesn't reliably batch several into one round -- a fixed
+    # cap sized for a couple of candidates would cut off a legitimate
+    # larger batch before it finishes. Scale with candidate count, but
+    # keep a floor so small batches still get a real safety margin.
+    max_rounds = max(12, len(candidates) * 3)
+    for _ in range(max_rounds):
         result = _groq_chat(messages, model)
         msg = result["choices"][0]["message"]
         messages.append(msg)

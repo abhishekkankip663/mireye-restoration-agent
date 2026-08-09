@@ -160,3 +160,25 @@ class TestRunPrioritizationAgent:
         assert result["recommendation"] is None
         assert "error" in result
         assert len(result["trace"]) == 12
+
+    @patch.object(agent, "GROQ_API_KEY", "fake-key")
+    @patch("agent._groq_chat")
+    def test_step_cap_scales_with_candidate_count(self, mock_chat):
+        # a fixed 12-round cap would cut off a legitimate 10-parcel batch
+        # (2 tool calls each = 20+ rounds needed) before it could finish
+        never_stops = {
+            "choices": [{"message": {
+                "role": "assistant", "content": None,
+                "tool_calls": [{
+                    "id": "call_x",
+                    "function": {"name": "get_erosion_context", "arguments": json.dumps({"lat": 1, "lng": 2})},
+                }],
+            }}]
+        }
+        mock_chat.return_value = never_stops
+        candidates = [{"name": f"P{i}", "lat": float(i), "lng": float(i)} for i in range(10)]
+
+        with patch.object(agent, "TOOL_IMPLS", {"get_erosion_context": lambda a: {"ok": True}}):
+            result = agent.run_prioritization_agent(candidates)
+
+        assert len(result["trace"]) == 30  # max(12, 10 * 3)
