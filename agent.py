@@ -40,7 +40,12 @@ def _request_with_retry(fn, attempts=3, delay_seconds=6):
         is_last = attempt == attempts - 1
         try:
             resp = fn()
-        except requests.exceptions.ConnectionError as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            # Timeout is its own exception type, not a subclass of
+            # ConnectionError -- without catching it separately, a
+            # request that times out (rather than failing fast with a
+            # 502) skips the retry loop entirely and gives up after
+            # just one attempt.
             last_exc = e
             if is_last:
                 raise
@@ -78,15 +83,15 @@ def get_erosion_context(lat: float, lng: float) -> dict:
     risk-assessment API -- a plain HTTP call, same as any other tool
     here. No dependency on that project's source code."""
     try:
-        # RISK_APP_URL is a free-tier host that can take 40-60s+ to wake
-        # from a cold start, returning 502 immediately (not a slow
-        # timeout) while it boots -- the backoff has to span that whole
-        # window, not just a few seconds.
+        # RISK_APP_URL is a free-tier host that can take over 60s to wake
+        # from a cold start (measured 63.6s directly) -- the per-request
+        # timeout has to clear that, or every attempt gets cut off right
+        # before the server would have responded.
         resp = _request_with_retry(
             lambda: requests.get(
                 f"{RISK_APP_URL}/api/risk",
                 params={"lat": lat, "lng": lng},
-                timeout=60,
+                timeout=90,
             ),
             attempts=4,
             delay_seconds=20,

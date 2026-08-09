@@ -9,6 +9,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 import agent
 
@@ -55,6 +56,21 @@ class TestGetErosionContext:
         ]
         assert result["data_completeness"]["unavailable_factors"] == []
         assert result["data_completeness"]["factors_evaluated"] == 7
+
+    @patch("agent.time.sleep")
+    @patch("agent.requests.get")
+    def test_timeout_is_retried_not_given_up_on_immediately(self, mock_get, mock_sleep):
+        # a cold-starting host can take longer than the per-request timeout
+        # to respond -- that's a Timeout, a different exception type than
+        # ConnectionError, and has to be retried the same way a 502 is
+        mock_get.side_effect = [
+            requests.exceptions.Timeout("timed out"),
+            mock_response({"risk": {"score": 2, "level": "low"}}, status_code=200),
+        ]
+        result = agent.get_erosion_context(40.0, -100.0)
+        assert result["composite_score"] == 2
+        assert mock_get.call_count == 2
+        assert mock_sleep.called
 
     @patch("agent.requests.get", side_effect=Exception("network down"))
     def test_network_failure_returns_error_dict_not_raise(self, _mock):
