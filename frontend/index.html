@@ -138,8 +138,26 @@
     white-space: pre-wrap; word-break: break-word; font-size: 0.78rem;
     margin: 0.35rem 0 0; color: var(--text-muted); font-family: ui-monospace, "SF Mono", Menlo, monospace;
   }
-  #recommendation {
-    white-space: pre-wrap; font-size: 0.94rem;
+  #recommendation { font-size: 0.94rem; }
+  #recommendation h3, #recommendation h4, #recommendation h5, #recommendation h6 {
+    margin: 1.1rem 0 0.5rem; font-size: 1rem; color: var(--text);
+  }
+  #recommendation h3:first-child, #recommendation h4:first-child { margin-top: 0; }
+  #recommendation p { margin: 0 0 0.8rem; }
+  #recommendation p:last-child { margin-bottom: 0; }
+  #recommendation ul, #recommendation ol { margin: 0 0 0.8rem; padding-left: 1.3rem; }
+  #recommendation li { margin-bottom: 0.3rem; }
+  #recommendation strong { color: var(--text); }
+  #recommendation hr { border: none; border-top: 1px solid var(--border); margin: 1.1rem 0; }
+  #recommendation table {
+    width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.86rem;
+  }
+  #recommendation th, #recommendation td {
+    text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  #recommendation th {
+    color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em;
   }
   .error { color: var(--error); }
 </style>
@@ -174,6 +192,75 @@
 
 <script>
 const candidatesEl = document.getElementById("candidates");
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function inlineMd(s) {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, "<em>$1</em>");
+}
+
+// Minimal markdown renderer (headers, bold/italic, bullet/numbered
+// lists, tables, paragraphs) -- the agent's recommendation is markdown
+// text, and rendering it beats showing literal ** and | characters.
+function renderMarkdown(md) {
+  const lines = escapeHtml(md).split("\n");
+  let html = "";
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (/^#{1,4}\s/.test(line)) {
+      const level = line.match(/^#+/)[0].length;
+      html += `<h${level + 2}>${inlineMd(line.replace(/^#+\s*/, ""))}</h${level + 2}>`;
+      i++;
+    } else if (/^\|.*\|$/.test(line)) {
+      const rows = [];
+      while (i < lines.length && /^\|.*\|$/.test(lines[i])) {
+        if (!/^\|[\s-:|]+\|$/.test(lines[i])) {
+          rows.push(lines[i].split("|").slice(1, -1).map(c => c.trim()));
+        }
+        i++;
+      }
+      if (rows.length) {
+        const [head, ...body] = rows;
+        html += "<table><thead><tr>" + head.map(c => `<th>${inlineMd(c)}</th>`).join("") + "</tr></thead><tbody>";
+        body.forEach(r => { html += "<tr>" + r.map(c => `<td>${inlineMd(c)}</td>`).join("") + "</tr>"; });
+        html += "</tbody></table>";
+      }
+    } else if (/^[-*]\s/.test(line)) {
+      html += "<ul>";
+      while (i < lines.length && /^[-*]\s/.test(lines[i])) {
+        html += `<li>${inlineMd(lines[i].replace(/^[-*]\s/, ""))}</li>`;
+        i++;
+      }
+      html += "</ul>";
+    } else if (/^\d+\.\s/.test(line)) {
+      html += "<ol>";
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        html += `<li>${inlineMd(lines[i].replace(/^\d+\.\s/, ""))}</li>`;
+        i++;
+      }
+      html += "</ol>";
+    } else if (line.trim() === "") {
+      i++;
+    } else if (/^-{3,}$/.test(line.trim())) {
+      html += "<hr>";
+      i++;
+    } else {
+      const para = [];
+      while (i < lines.length && lines[i].trim() !== "" && !/^(#{1,4}\s|\||[-*]\s|\d+\.\s|-{3,}$)/.test(lines[i])) {
+        para.push(lines[i]);
+        i++;
+      }
+      html += `<p>${inlineMd(para.join(" "))}</p>`;
+    }
+  }
+  return html;
+}
 
 function addParcelRow(name = "", lat = "", lng = "") {
   const row = document.createElement("div");
@@ -242,7 +329,7 @@ document.getElementById("run").onclick = async () => {
     });
 
     if (data.recommendation) {
-      recEl.textContent = data.recommendation;
+      recEl.innerHTML = renderMarkdown(data.recommendation);
       recWrap.style.display = "block";
     } else {
       statusEl.innerHTML += `<br><span class="error">${data.error || "No recommendation produced."}</span>`;
