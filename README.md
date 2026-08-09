@@ -12,7 +12,7 @@ funding-priority recommendation.
 
 ## What Mireye is combined with
 
-**Erosion/deforestation risk** (via [mireye-risk-app](https://github.com/<you>/mireye-risk-app),
+**Erosion/deforestation risk** (via [mireye-risk-app](https://github.com/abhishekkankip663/mireye-risk-app),
 a live RUSLE-based erosion model built on USDA/FEMA/USGS soil, slope, and
 flood data, plus Global Forest Watch deforestation tracking) is combined with
 **real county-level economic and demographic data** (via Mireye's own
