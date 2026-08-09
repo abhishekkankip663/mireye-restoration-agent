@@ -10,6 +10,13 @@ candidate parcels/watersheds, decides for itself what data it needs, gathers
 it from two real, independent sources, and produces a written, justified
 funding-priority recommendation.
 
+## Try it live
+
+**https://mireye-restoration-agent.onrender.com** — no setup, no API keys needed on your end.
+Enter two or more parcels and click "Run agent" to watch it work. It's hosted on a free tier,
+so if it's been idle the first request can take up to ~1-2 minutes to wake up — that's normal,
+not a bug; it will complete.
+
 ## What Mireye is combined with
 
 **Erosion/deforestation risk** (via [mireye-risk-app](https://github.com/abhishekkankip663/mireye-risk-app),
