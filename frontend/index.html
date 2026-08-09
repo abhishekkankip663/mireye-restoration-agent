@@ -103,7 +103,7 @@ document.getElementById("run").onclick = async () => {
   traceEl.innerHTML = "";
   recWrap.style.display = "none";
   runBtn.disabled = true;
-  statusEl.textContent = "Agent is reasoning — this can take 10–60 seconds (longer on a cold server start)...";
+  statusEl.textContent = "Agent is reasoning — this usually takes 10–30 seconds, but can take up to 2 minutes if the free-tier servers need to wake up from being idle. Please wait, it will complete.";
 
   try {
     const resp = await fetch("/prioritize", {

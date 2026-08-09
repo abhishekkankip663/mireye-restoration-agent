@@ -67,14 +67,17 @@ class TestGetErosionContext:
     @patch("agent.time.sleep")
     @patch("agent.requests.get")
     def test_gives_up_after_persistent_502(self, mock_get, mock_sleep):
+        # get_erosion_context uses attempts=4 (RISK_APP_URL's cold starts
+        # can run 40-60s+, so it gets a wider retry budget than the default)
         mock_get.side_effect = [
+            mock_response(status_code=502),
             mock_response(status_code=502),
             mock_response(status_code=502),
             mock_response(status_ok=False, status_code=502),
         ]
         result = agent.get_erosion_context(40.0, -100.0)
         assert "error" in result
-        assert mock_get.call_count == 3
+        assert mock_get.call_count == 4
 
 
 class TestGetEconomicContext:

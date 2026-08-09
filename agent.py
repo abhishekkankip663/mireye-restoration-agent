@@ -78,11 +78,19 @@ def get_erosion_context(lat: float, lng: float) -> dict:
     risk-assessment API -- a plain HTTP call, same as any other tool
     here. No dependency on that project's source code."""
     try:
-        resp = _request_with_retry(lambda: requests.get(
-            f"{RISK_APP_URL}/api/risk",
-            params={"lat": lat, "lng": lng},
-            timeout=60,
-        ))
+        # RISK_APP_URL is a free-tier host that can take 40-60s+ to wake
+        # from a cold start, returning 502 immediately (not a slow
+        # timeout) while it boots -- the backoff has to span that whole
+        # window, not just a few seconds.
+        resp = _request_with_retry(
+            lambda: requests.get(
+                f"{RISK_APP_URL}/api/risk",
+                params={"lat": lat, "lng": lng},
+                timeout=60,
+            ),
+            attempts=4,
+            delay_seconds=20,
+        )
         data = resp.json()
         risk = data.get("risk") or {}
         rusle = risk.get("rusle_lite") or {}
