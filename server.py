@@ -1,12 +1,18 @@
 """
-Minimal live API for the restoration-funding prioritization agent.
+Live API + minimal UI for the restoration-funding prioritization agent.
 
-This is intentionally thin -- the whole point of this project is the
-agent (agent.py), not a web app around it. This just exposes it over
-HTTP for anyone who wants to try it live instead of via the CLI.
+The reasoning lives entirely in agent.py -- this file only exposes it
+over HTTP (POST /prioritize) and serves a thin frontend (frontend/) that
+calls that same endpoint. The UI has no logic of its own: it collects
+parcel coordinates, calls /prioritize, and renders the agent's own tool
+trace and recommendation. All reasoning/deciding/acting happens in the
+agent, not in this file or the page.
 """
 
+from pathlib import Path
+
 from fastapi import Body, FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_prioritization_agent
@@ -35,9 +41,13 @@ def prioritize(body: PrioritizeRequest = Body(...)):
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.get("/")
+@app.get("/api")
 def root():
     return {
         "name": "Mireye Restoration-Funding Prioritization Agent",
         "usage": "POST /prioritize with {candidates: [{name, lat, lng}], goal?: str}",
     }
+
+
+frontend_dir = Path(__file__).parent / "frontend"
+app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")

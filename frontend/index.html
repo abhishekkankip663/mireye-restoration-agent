@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restoration-Funding Prioritization Agent</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+  p.sub { color: #666; margin-top: 0; font-size: 0.92rem; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 1rem; padding: 0.9rem 1rem; }
+  legend { padding: 0 0.4rem; font-weight: 600; font-size: 0.9rem; }
+  .row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .row input { flex: 1; min-width: 100px; padding: 0.45rem 0.5rem; border: 1px solid #bbb; border-radius: 6px; font-size: 0.95rem; }
+  .row input[type=text]:first-child { flex: 2; min-width: 160px; }
+  button { cursor: pointer; border-radius: 6px; border: 1px solid #999; padding: 0.5rem 0.9rem; font-size: 0.9rem; background: #f5f5f5; }
+  button.primary { background: #1a5c38; color: white; border-color: #1a5c38; font-weight: 600; }
+  button.primary:disabled { opacity: 0.55; cursor: default; }
+  #candidates { margin-bottom: 0.75rem; }
+  #goal { width: 100%; padding: 0.5rem; border: 1px solid #bbb; border-radius: 6px; font-size: 0.95rem; margin-top: 0.3rem; box-sizing: border-box; }
+  #status { margin: 1rem 0; font-size: 0.9rem; color: #555; }
+  .step { border-left: 3px solid #1a5c38; padding: 0.5rem 0.8rem; margin-bottom: 0.6rem; background: rgba(26,92,56,0.06); border-radius: 0 6px 6px 0; }
+  .step .tool { font-weight: 600; font-size: 0.85rem; }
+  .step pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem; margin: 0.3rem 0 0; }
+  #recommendation { white-space: pre-wrap; border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-top: 0.5rem; }
+  h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+
+<h1>Restoration-Funding Prioritization Agent</h1>
+<p class="sub">Enter parcels to compare. The agent decides for itself what to look up for each one, reasons about the trade-off between erosion risk and economic value protected, and returns a written funding recommendation.</p>
+
+<fieldset>
+  <legend>Parcels</legend>
+  <div id="candidates"></div>
+  <button type="button" id="addParcel">+ Add another parcel</button>
+</fieldset>
+
+<fieldset>
+  <legend>Goal (optional)</legend>
+  <input id="goal" type="text" placeholder="e.g. We can only fund one project this quarter.">
+</fieldset>
+
+<button class="primary" id="run">Run agent</button>
+
+<div id="status"></div>
+<div id="trace"></div>
+<div id="recommendationWrap" style="display:none;">
+  <h2>Recommendation</h2>
+  <div id="recommendation"></div>
+</div>
+
+<script>
+const candidatesEl = document.getElementById("candidates");
+
+function addParcelRow(name = "", lat = "", lng = "") {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `
+    <input type="text" placeholder="Parcel name" value="${name}">
+    <input type="number" step="any" placeholder="Latitude" value="${lat}">
+    <input type="number" step="any" placeholder="Longitude" value="${lng}">
+    <button type="button" class="remove" title="Remove">&times;</button>
+  `;
+  row.querySelector(".remove").onclick = () => {
+    if (candidatesEl.children.length > 2) row.remove();
+  };
+  candidatesEl.appendChild(row);
+}
+
+addParcelRow("Parcel A", "34.1478", "-118.1445");
+addParcelRow("Parcel B", "47.267184", "-106.995991");
+
+document.getElementById("addParcel").onclick = () => addParcelRow();
+
+document.getElementById("run").onclick = async () => {
+  const rows = [...candidatesEl.querySelectorAll(".row")];
+  const candidates = rows.map(row => {
+    const [name, lat, lng] = row.querySelectorAll("input");
+    return { name: name.value || "Unnamed parcel", lat: parseFloat(lat.value), lng: parseFloat(lng.value) };
+  }).filter(c => !isNaN(c.lat) && !isNaN(c.lng));
+
+  const statusEl = document.getElementById("status");
+  const traceEl = document.getElementById("trace");
+  const recWrap = document.getElementById("recommendationWrap");
+  const recEl = document.getElementById("recommendation");
+  const runBtn = document.getElementById("run");
+
+  if (candidates.length < 2) {
+    statusEl.innerHTML = `<span class="error">Enter at least two parcels with valid coordinates.</span>`;
+    return;
+  }
+
+  traceEl.innerHTML = "";
+  recWrap.style.display = "none";
+  runBtn.disabled = true;
+  statusEl.textContent = "Agent is reasoning — this can take 10–60 seconds (longer on a cold server start)...";
+
+  try {
+    const resp = await fetch("/prioritize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidates, goal: document.getElementById("goal").value || null }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      statusEl.innerHTML = `<span class="error">${data.detail || "Request failed."}</span>`;
+      runBtn.disabled = false;
+      return;
+    }
+
+    statusEl.textContent = `Done — the agent made ${data.trace.length} tool call(s) before answering:`;
+
+    data.trace.forEach((step, i) => {
+      const div = document.createElement("div");
+      div.className = "step";
+      div.innerHTML = `<div class="tool">${i + 1}. called ${step.tool}(${JSON.stringify(step.args)})</div><pre>${JSON.stringify(step.result, null, 2)}</pre>`;
+      traceEl.appendChild(div);
+    });
+
+    if (data.recommendation) {
+      recEl.textContent = data.recommendation;
+      recWrap.style.display = "block";
+    } else {
+      statusEl.innerHTML += `<br><span class="error">${data.error || "No recommendation produced."}</span>`;
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<span class="error">Couldn't reach the agent: ${e}</span>`;
+  } finally {
+    runBtn.disabled = false;
+  }
+};
+</script>
+
+</body>
+</html>

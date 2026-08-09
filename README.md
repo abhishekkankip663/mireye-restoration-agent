@@ -50,8 +50,12 @@ export MIREYE_BEARER_TOKEN=... # from `uvx mireye-mcp login`, or your Mireye das
 # From the command line, against the included example:
 python3 cli.py candidates_example.json --goal "We can only fund one project this quarter."
 
-# Or as a live API:
+# Or as a live API + browser UI:
 uvicorn server:app --reload
+# open http://localhost:8000 for a simple form (enter parcels, see the
+# agent's tool-call trace and recommendation render live)
+
+# Or hit the API directly:
 curl -X POST localhost:8000/prioritize -H "Content-Type: application/json" -d '{
   "candidates": [
     {"name": "Parcel A", "lat": 34.1478, "lng": -118.1445},
@@ -64,9 +68,14 @@ curl -X POST localhost:8000/prioritize -H "Content-Type: application/json" -d '{
 
 - `agent.py` — the agent itself: tool definitions, the reasoning loop, the
   system prompt that forces an explicit ecological-vs-economic trade-off
-  statement per candidate.
+  statement per candidate. All reasoning/deciding/acting happens here.
 - `cli.py` — run it directly, no server required.
-- `server.py` — thin FastAPI wrapper for a live demo.
+- `server.py` — thin FastAPI wrapper exposing `POST /prioritize`.
+- `frontend/index.html` — a minimal form (no framework) that calls
+  `/prioritize` and renders the agent's own tool-call trace and final
+  recommendation. It has no logic of its own — it's a window into the
+  same agent, for people who'd rather not use a CLI (e.g. a GIS analyst
+  at a land trust).
 
 The erosion/deforestation tool calls a **live, publicly deployed API**
 (`mireye-risk-app`), not shared source code — this repo has no dependency on
