@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .env
+one_pager.md
+one_pager.pdf
