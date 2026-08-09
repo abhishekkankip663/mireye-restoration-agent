@@ -139,8 +139,18 @@
     display: flex; align-items: center; justify-content: center; margin-top: 0.1rem;
   }
   .step .tool { font-weight: 600; font-size: 0.86rem; color: var(--text); }
-  .step pre {
-    white-space: pre-wrap; word-break: break-word; font-size: 0.78rem;
+  .step-summary { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem; }
+  .step-summary strong { color: var(--text); }
+  .step-raw { margin-top: 0.4rem; }
+  .step-raw summary {
+    cursor: pointer; font-size: 0.72rem; color: var(--text-muted);
+    user-select: none; list-style: none; display: inline-block;
+  }
+  .step-raw summary::-webkit-details-marker { display: none; }
+  .step-raw summary::before { content: "▸ "; }
+  .step-raw[open] summary::before { content: "▾ "; }
+  .step-raw pre {
+    white-space: pre-wrap; word-break: break-word; font-size: 0.76rem;
     margin: 0.35rem 0 0; color: var(--text-muted); font-family: ui-monospace, "SF Mono", Menlo, monospace;
   }
   #recommendation { font-size: 0.94rem; }
@@ -200,6 +210,38 @@ const candidatesEl = document.getElementById("candidates");
 
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function findCandidateName(candidates, args) {
+  const match = candidates.find(c => Math.abs(c.lat - args.lat) < 1e-6 && Math.abs(c.lng - args.lng) < 1e-6);
+  return match ? match.name : `(${args.lat}, ${args.lng})`;
+}
+
+function describeTool(tool) {
+  return tool === "get_erosion_context" ? "Checked erosion & deforestation risk" : "Checked economic context";
+}
+
+function fmtNum(n, opts) {
+  return typeof n === "number" ? n.toLocaleString(undefined, opts) : "n/a";
+}
+
+// Concise, human-readable one-line summary of a tool result -- the full
+// raw JSON is still available in the collapsed <details> next to it, so
+// nothing is hidden, it's just not the default view.
+function summarizeResult(tool, r) {
+  if (r.error) {
+    return `<span class="error">⚠ Unavailable — ${escapeHtml(r.error)}</span>`;
+  }
+  if (tool === "get_erosion_context") {
+    const missing = (r.data_completeness && r.data_completeness.unavailable_factors) || [];
+    const missingNote = missing.length ? ` · missing: ${missing.map(escapeHtml).join(", ")}` : "";
+    const score = r.composite_score === null || r.composite_score === undefined ? "n/a (insufficient data)" : r.composite_score;
+    return `Score: <strong>${score}</strong> (${escapeHtml(r.level || "unknown")}) · confidence: ${escapeHtml(r.confidence || "unknown")}${missingNote}`;
+  }
+  if (tool === "get_economic_context") {
+    return `${escapeHtml(r.county || "Unknown county")}, ${escapeHtml(r.state || "")} · Population: ${fmtNum(r.population)} · Income: $${fmtNum(r.median_household_income_usd)}`;
+  }
+  return escapeHtml(JSON.stringify(r));
 }
 
 function inlineMd(s) {
@@ -338,7 +380,17 @@ document.getElementById("run").onclick = async () => {
     data.trace.forEach((step, i) => {
       const div = document.createElement("div");
       div.className = "step";
-      div.innerHTML = `<div class="badge">${i + 1}</div><div><div class="tool">${step.tool}(${JSON.stringify(step.args)})</div><pre>${JSON.stringify(step.result, null, 2)}</pre></div>`;
+      const name = findCandidateName(candidates, step.args);
+      div.innerHTML = `
+        <div class="badge">${i + 1}</div>
+        <div>
+          <div class="tool">${describeTool(step.tool)} — ${escapeHtml(name)}</div>
+          <div class="step-summary">${summarizeResult(step.tool, step.result)}</div>
+          <details class="step-raw">
+            <summary>View raw data</summary>
+            <pre>${JSON.stringify(step.result, null, 2)}</pre>
+          </details>
+        </div>`;
       traceEl.appendChild(div);
     });
 
