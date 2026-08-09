@@ -23,8 +23,36 @@ Reasoning engine: Groq's free, OpenAI-compatible chat completions API.
 
 import json
 import os
+import time
 
 import requests
+
+# Free-tier hosts (this agent's own dependencies included) sleep after
+# inactivity and can return a 502 for a few seconds while waking up --
+# that's transient, not a real failure, so it's worth one short retry
+# before giving up and reporting the gap to the model.
+_RETRYABLE_STATUS = {502, 503, 504}
+
+
+def _request_with_retry(fn, attempts=3, delay_seconds=6):
+    last_exc = None
+    for attempt in range(attempts):
+        is_last = attempt == attempts - 1
+        try:
+            resp = fn()
+        except requests.exceptions.ConnectionError as e:
+            last_exc = e
+            if is_last:
+                raise
+            time.sleep(delay_seconds)
+            continue
+
+        if resp.status_code in _RETRYABLE_STATUS and not is_last:
+            time.sleep(delay_seconds)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise last_exc
 
 # The already-live, already-deployed risk-assessment service. The agent
 # treats this exactly like any other external API -- no shared code, no
@@ -50,12 +78,11 @@ def get_erosion_context(lat: float, lng: float) -> dict:
     risk-assessment API -- a plain HTTP call, same as any other tool
     here. No dependency on that project's source code."""
     try:
-        resp = requests.get(
+        resp = _request_with_retry(lambda: requests.get(
             f"{RISK_APP_URL}/api/risk",
             params={"lat": lat, "lng": lng},
             timeout=60,
-        )
-        resp.raise_for_status()
+        ))
         data = resp.json()
         risk = data.get("risk") or {}
         rusle = risk.get("rusle_lite") or {}
@@ -84,13 +111,12 @@ def get_economic_context(lat: float, lng: float) -> dict:
     Mireye's /v1/lookup endpoint."""
     try:
         token = get_mireye_token()
-        resp = requests.post(
+        resp = _request_with_retry(lambda: requests.post(
             f"{MIREYE_BASE_URL}/v1/lookup",
             headers={"Authorization": f"Bearer {token}"},
             json={"input": f"{lat},{lng}", "include_parcel": False},
             timeout=30,
-        )
-        resp.raise_for_status()
+        ))
         data = resp.json()
         if data.get("disposition") != "resolved":
             return {"error": f"lookup did not resolve: {data.get('disposition')}"}

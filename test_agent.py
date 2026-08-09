@@ -13,9 +13,10 @@ import pytest
 import agent
 
 
-def mock_response(json_data=None, status_ok=True):
+def mock_response(json_data=None, status_ok=True, status_code=200):
     resp = MagicMock()
     resp.json.return_value = json_data if json_data is not None else {}
+    resp.status_code = status_code
     if status_ok:
         resp.raise_for_status.return_value = None
     else:
@@ -49,6 +50,31 @@ class TestGetErosionContext:
     def test_network_failure_returns_error_dict_not_raise(self, _mock):
         result = agent.get_erosion_context(40.0, -100.0)
         assert "error" in result
+
+    @patch("agent.time.sleep")
+    @patch("agent.requests.get")
+    def test_retries_once_on_502_then_succeeds(self, mock_get, mock_sleep):
+        # a cold-starting host returns a transient 502 first, then a real result
+        mock_get.side_effect = [
+            mock_response(status_code=502),
+            mock_response({"risk": {"score": 3, "level": "moderate"}}, status_code=200),
+        ]
+        result = agent.get_erosion_context(40.0, -100.0)
+        assert result["composite_score"] == 3
+        assert mock_get.call_count == 2
+        assert mock_sleep.called
+
+    @patch("agent.time.sleep")
+    @patch("agent.requests.get")
+    def test_gives_up_after_persistent_502(self, mock_get, mock_sleep):
+        mock_get.side_effect = [
+            mock_response(status_code=502),
+            mock_response(status_code=502),
+            mock_response(status_ok=False, status_code=502),
+        ]
+        result = agent.get_erosion_context(40.0, -100.0)
+        assert "error" in result
+        assert mock_get.call_count == 3
 
 
 class TestGetEconomicContext:
