@@ -71,10 +71,15 @@
     color: var(--text-muted); margin-bottom: 0.8rem;
   }
 
-  .row { display: flex; gap: 0.5rem; margin-bottom: 0.55rem; flex-wrap: wrap; align-items: center; }
+  .row { display: flex; gap: 0.5rem; margin-bottom: 0.55rem; flex-wrap: wrap; align-items: flex-end; }
   .row:last-child { margin-bottom: 0; }
+  .field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 100px; }
+  .field label {
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
   input {
-    flex: 1; min-width: 100px; padding: 0.55rem 0.7rem;
+    width: 100%; padding: 0.55rem 0.7rem;
     border: 1px solid var(--border); border-radius: 8px;
     font-size: 0.95rem; background: var(--bg); color: var(--text);
     transition: border-color 0.15s, box-shadow 0.15s;
@@ -83,8 +88,8 @@
     outline: none; border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-tint);
   }
-  .row input[type=text]:first-child { flex: 1.6; min-width: 150px; }
-  .row input[type=number] { max-width: 140px; }
+  .field.name { flex: 1.6; min-width: 150px; }
+  .field.coord { max-width: 140px; }
 
   button {
     cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
@@ -266,9 +271,18 @@ function addParcelRow(name = "", lat = "", lng = "") {
   const row = document.createElement("div");
   row.className = "row";
   row.innerHTML = `
-    <input type="text" placeholder="Parcel name" value="${name}">
-    <input type="number" step="any" placeholder="Latitude" value="${lat}">
-    <input type="number" step="any" placeholder="Longitude" value="${lng}">
+    <div class="field name">
+      <label>Parcel name</label>
+      <input type="text" placeholder="e.g. Parcel A" value="${name}">
+    </div>
+    <div class="field coord">
+      <label>Latitude</label>
+      <input type="number" step="any" placeholder="e.g. 34.1478" value="${lat}">
+    </div>
+    <div class="field coord">
+      <label>Longitude</label>
+      <input type="number" step="any" placeholder="e.g. -118.1445" value="${lng}">
+    </div>
     <button type="button" class="remove" title="Remove">&times;</button>
   `;
   row.querySelector(".remove").onclick = () => {
