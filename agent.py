@@ -94,6 +94,7 @@ def get_erosion_context(lat: float, lng: float) -> dict:
         data = resp.json()
         risk = data.get("risk") or {}
         rusle = risk.get("rusle_lite") or {}
+        completeness = risk.get("data_completeness") or {}
         loss_years = data.get("tree_cover_loss_by_year") or []
         return {
             "composite_score": risk.get("score"),
@@ -101,14 +102,27 @@ def get_erosion_context(lat: float, lng: float) -> dict:
             "confidence": risk.get("confidence"),
             "rusle_relative_index": rusle.get("relative_index"),
             "annual_soil_loss_tons_per_acre": rusle.get("annual_soil_loss_tons_per_acre"),
+            "rusle_unavailable_reason": risk.get("rusle_unavailable_reason"),
             "recent_deforestation_ha_since_2018": sum(
                 row.get("area_ha", 0) for row in loss_years
                 if row.get("umd_tree_cover_loss__year", 0) >= 2018
             ),
-            "top_factors": [
-                f["label"] for f in (risk.get("factors") or [])
-                if f.get("severity") in ("high", "moderate")
+            # Full factor detail (label, value, severity), not just a
+            # filtered list of labels -- a GIS analyst needs the actual
+            # numbers and methodology, not a pre-summarized verdict.
+            "factors": [
+                {"label": f.get("label"), "detail": f.get("detail"), "severity": f.get("severity")}
+                for f in (risk.get("factors") or [])
             ],
+            # Exactly which signals were missing/imputed for this score,
+            # not just a confidence label -- mirrors what the risk-app's
+            # own UI discloses, so the agent can be equally specific.
+            "data_completeness": {
+                "factors_evaluated": completeness.get("factors_evaluated"),
+                "factors_total": completeness.get("factors_total"),
+                "unavailable_factors": completeness.get("unavailable_factors"),
+                "imputed_points": completeness.get("imputed_points"),
+            },
         }
     except Exception as e:
         return {"error": f"erosion context unavailable: {e}"}
@@ -152,7 +166,9 @@ TOOLS = [
             "description": (
                 "Get real erosion and deforestation risk data for one candidate "
                 "parcel/location: composite risk score, RUSLE soil-loss estimate, "
-                "and recent tree-cover loss."
+                "recent tree-cover loss, the full list of individual risk factors "
+                "with their values, and exactly which factors (if any) were "
+                "unavailable or had to be imputed for that location."
             ),
             "parameters": {
                 "type": "object",
@@ -210,10 +226,27 @@ SYSTEM_PROMPT = (
     "trading lower ecological urgency for higher economic value protected (or vice "
     "versa) -- name the trade-off in one explicit sentence per candidate, don't just "
     "assert a conclusion.\n\n"
-    "Produce a final ranked list. For each candidate: state its ecological severity, "
-    "state its economic value protected, then state explicitly which one you weighted "
-    "more heavily and why. Explicitly flag any candidate whose data was incomplete or "
-    "low-confidence rather than treating it the same as a fully-verified result."
+    "The audience is a GIS analyst or land trust staff member, not a general reader -- "
+    "write with the same rigor and transparency as a real risk-assessment report, not "
+    "a marketing summary. For EACH candidate, report in this much detail:\n"
+    "- Ecological severity: the composite score and level, AND the individual factors "
+    "behind it (e.g. RUSLE soil-loss estimate or relative index, recent deforestation "
+    "hectares, and any other factor get_erosion_context returned) with their actual "
+    "values -- not just a one-word verdict like 'low' or 'high'.\n"
+    "- Data completeness: name the SPECIFIC factors that were unavailable or imputed "
+    "for that candidate (get_erosion_context's data_completeness.unavailable_factors "
+    "and imputed_points tell you exactly which ones and how many points were assumed), "
+    "not a vague 'some data was missing.' If a factor is missing, say which one and "
+    "what that means for how much to trust the score. If rusle_unavailable_reason is "
+    "present, state why the RUSLE estimate specifically couldn't be computed.\n"
+    "- Economic value protected: the specific figures (population, income, growth, "
+    "home price trend, Opportunity Zone status), not just 'high' or 'low.'\n"
+    "- The explicit trade-off statement described above.\n\n"
+    "Produce a final ranked list with this full per-candidate detail, then state which "
+    "factor you weighted more heavily and why. Never collapse a candidate's writeup "
+    "into a single summary line -- a GIS analyst needs to see the underlying numbers "
+    "and exactly what was and wasn't available, the same way they would from a formal "
+    "risk assessment, not just a conclusion to take on faith."
 )
 
 

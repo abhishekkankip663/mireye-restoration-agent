@@ -31,10 +31,15 @@ class TestGetErosionContext:
             "risk": {
                 "score": 5, "level": "moderate", "confidence": "high",
                 "rusle_lite": {"relative_index": 0.5, "annual_soil_loss_tons_per_acre": 12.3},
+                "rusle_unavailable_reason": None,
                 "factors": [
-                    {"label": "Landslide susceptibility", "severity": "high"},
-                    {"label": "Soil ponding frequency", "severity": "low"},
+                    {"label": "Landslide susceptibility", "detail": "72", "severity": "high"},
+                    {"label": "Soil ponding frequency", "detail": "None", "severity": "low"},
                 ],
+                "data_completeness": {
+                    "factors_evaluated": 7, "factors_total": 7,
+                    "unavailable_factors": [], "imputed_points": {},
+                },
             },
             "tree_cover_loss_by_year": [
                 {"umd_tree_cover_loss__year": 2020, "area_ha": 3.0},
@@ -44,7 +49,12 @@ class TestGetErosionContext:
         result = agent.get_erosion_context(40.0, -100.0)
         assert result["composite_score"] == 5
         assert result["recent_deforestation_ha_since_2018"] == 3.0
-        assert result["top_factors"] == ["Landslide susceptibility"]
+        assert result["factors"] == [
+            {"label": "Landslide susceptibility", "detail": "72", "severity": "high"},
+            {"label": "Soil ponding frequency", "detail": "None", "severity": "low"},
+        ]
+        assert result["data_completeness"]["unavailable_factors"] == []
+        assert result["data_completeness"]["factors_evaluated"] == 7
 
     @patch("agent.requests.get", side_effect=Exception("network down"))
     def test_network_failure_returns_error_dict_not_raise(self, _mock):
