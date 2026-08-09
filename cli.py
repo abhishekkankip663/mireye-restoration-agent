@@ -31,7 +31,11 @@ def main():
         candidates = json.load(f)
 
     print(f"Running prioritization agent over {len(candidates)} candidates...\n", file=sys.stderr)
-    result = run_prioritization_agent(candidates, goal=args.goal, model=args.model)
+    try:
+        result = run_prioritization_agent(candidates, goal=args.goal, model=args.model)
+    except RuntimeError as e:
+        print(f"\nCan't run the agent: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print("=" * 70)
     print("AGENT REASONING TRACE (tool calls it made, and what it learned)")
