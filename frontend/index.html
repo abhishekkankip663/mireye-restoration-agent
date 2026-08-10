@@ -359,7 +359,7 @@ document.getElementById("run").onclick = async () => {
   traceEl.innerHTML = "";
   recWrap.style.display = "none";
   runBtn.disabled = true;
-  statusEl.innerHTML = `<span class="spinner"></span> Agent is reasoning — usually 10–30 seconds, but can take a few minutes if the free-tier servers need to wake up from being idle. It will complete — please don't close this tab.`;
+  statusEl.innerHTML = `<span class="spinner"></span> Agent is reasoning — usually 10–30 seconds, but can take up to 2 minutes if the free-tier servers need to wake up from being idle. It will complete — please don't close this tab.`;
 
   try {
     const resp = await fetch("/prioritize", {
