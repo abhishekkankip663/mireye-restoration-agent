@@ -83,18 +83,23 @@ def get_erosion_context(lat: float, lng: float) -> dict:
     risk-assessment API -- a plain HTTP call, same as any other tool
     here. No dependency on that project's source code."""
     try:
-        # RISK_APP_URL is a free-tier host that can take over 60s to wake
-        # from a cold start (measured 63.6s directly) -- the per-request
-        # timeout has to clear that, or every attempt gets cut off right
-        # before the server would have responded.
+        # RISK_APP_URL is a free-tier host with observed cold-start times
+        # up to ~64s and rising under repeated load. The retry SCHEDULE
+        # (not just the per-request timeout) has to cover that with real
+        # margin: checks land at t=0,25,50,75,100,125s. A narrower window
+        # (previously checks stopped at t=60s) meant an ordinary boot that
+        # ran slightly long failed every attempt, and a model-initiated
+        # retry of the whole tool call restarted the schedule from t=0
+        # instead of continuing to wait -- compounding the problem instead
+        # of fixing it.
         resp = _request_with_retry(
             lambda: requests.get(
                 f"{RISK_APP_URL}/api/risk",
                 params={"lat": lat, "lng": lng},
                 timeout=90,
             ),
-            attempts=4,
-            delay_seconds=20,
+            attempts=6,
+            delay_seconds=25,
         )
         data = resp.json()
         risk = data.get("risk") or {}
